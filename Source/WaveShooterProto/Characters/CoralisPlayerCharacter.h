@@ -1,0 +1,91 @@
+// Copyright Acolyte Games. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Characters/CoralisCharacterBase.h"
+#include "CoralisPlayerCharacter.generated.h"
+
+class UCameraComponent;
+class UCoralisCameraRigComponent;
+class UCoralisInputConfig;
+class USpringArmComponent;
+struct FInputActionValue;
+
+/** Player body: the shared base plus the over-the-shoulder camera and Enhanced Input. */
+UCLASS(Blueprintable)
+class WAVESHOOTERPROTO_API ACoralisPlayerCharacter : public ACoralisCharacterBase
+{
+	GENERATED_BODY()
+
+public:
+	ACoralisPlayerCharacter(const FObjectInitializer& ObjectInitializer);
+
+	UFUNCTION(BlueprintPure, Category = "Coralis|Camera")
+	UCoralisCameraRigComponent* GetCameraRig() const { return CameraRig; }
+
+	/**
+	 * Test hook for scripted checks: applies this move input (X = right, Y = forward, camera relative) every frame
+	 * until cleared with zero. Development builds only.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Coralis|Debug")
+	void SetDebugMoveInput(FVector2D Input);
+
+	UFUNCTION(BlueprintPure, Category = "Coralis|Debug")
+	FVector2D GetDebugMoveInput() const { return DebugMoveInput; }
+
+	virtual void Tick(float DeltaSeconds) override;
+	virtual void NotifyControllerChanged() override;
+
+protected:
+	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Coralis|Camera")
+	TObjectPtr<USpringArmComponent> CameraBoom;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Coralis|Camera")
+	TObjectPtr<UCameraComponent> FollowCamera;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Coralis|Camera")
+	TObjectPtr<UCoralisCameraRigComponent> CameraRig;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Coralis|Input")
+	TObjectPtr<UCoralisInputConfig> InputConfig;
+
+private:
+	void AddMappingContexts();
+	void ApplyMoveInput(const FVector2D& Input);
+
+	void OnMove(const FInputActionValue& Value);
+	void OnLook(const FInputActionValue& Value);
+	void OnMouseLook(const FInputActionValue& Value);
+	void OnSprintStarted(const FInputActionValue& Value);
+	void OnSprintCompleted(const FInputActionValue& Value);
+	void OnDodge(const FInputActionValue& Value);
+	void OnEvadeRunStarted(const FInputActionValue& Value);
+	void OnEvadeRunCompleted(const FInputActionValue& Value);
+	void OnAimStarted(const FInputActionValue& Value);
+	void OnAimCompleted(const FInputActionValue& Value);
+	void OnCrouch(const FInputActionValue& Value);
+	void OnShoulderSwap(const FInputActionValue& Value);
+	void OnInvertMouseLook(const FInputActionValue& Value);
+
+	void AddLook(float YawDegrees, float PitchDegrees);
+
+	FVector2D LastMoveInput = FVector2D::ZeroVector;
+	FVector2D DebugMoveInput = FVector2D::ZeroVector;
+	double EvadePressTime = -1.0;
+	bool bEvadeHeldIntoSprint = false;
+	bool bSprintHeld = false;
+
+	/** Mouse look inversion in use; starts from the input config, the invert key flips it. */
+	bool bMouseYInverted = false;
+
+	/**
+	 * While a sprint is wanted, the stick steers relative to the camera direction at the moment the sprint was
+	 * pressed, turned only by the player's own look input. The camera's automatic follow then can't feed back into the
+	 * run direction (a sprint started backwards keeps running that way while the camera swings round behind).
+	 */
+	float SprintInputFrameYaw = 0.f;
+	bool bSprintInputFrameLatched = false;
+};
