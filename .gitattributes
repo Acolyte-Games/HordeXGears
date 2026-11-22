@@ -1,2 +1,8 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Unreal assets are binary: never normalize, diff or merge them as text
+*.uasset binary
+*.umap binary
+*.ubulk binary
+*.uexp binary
