@@ -82,9 +82,10 @@ private:
 	bool bMouseYInverted = false;
 
 	/**
-	 * While a sprint is wanted, the stick steers relative to the camera direction at the moment the sprint was
-	 * pressed, turned only by the player's own look input. The camera's automatic follow then can't feed back into the
-	 * run direction (a sprint started backwards keeps running that way while the camera swings round behind).
+	 * While sprinting with the stick pulled back past the live steer angle, the stick steers relative to the camera
+	 * direction held from that moment, turned only by the player's own look input. The camera's automatic follow then
+	 * can't feed back into the run direction (a sprint started backwards keeps running that way while the camera swings
+	 * round behind). Otherwise the stick follows the live camera.
 	 */
 	float SprintInputFrameYaw = 0.f;
 	bool bSprintInputFrameLatched = false;

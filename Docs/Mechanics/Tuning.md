@@ -35,6 +35,7 @@ Keep this list up to date: add a line whenever something feels off, and note wha
 | Standing: torso turn before the legs follow | DA_PlayerMovement > Ground | Idle Torso Turn Limit, Idle Catch Up Rate, Idle Catch Up Stop Angle | 70°, 400°/s, 5° | Feet stay planted until the camera is past the limit, then the legs turn to face it. A turn-in-place step animation would make the catch-up look better (not needed for it to work). |
 | Torso twist | ABP_CoralisPlayer Class Defaults > Coralis\|Aim | Torso Twist Limit, Torso Twist Rate | 90°, 720°/s | How far and how fast the upper body twists toward the camera. |
 | Sprint + back | DA_PlayerMovement > Sprint | Sprint Cancel Input Angle | 150° | Sprint can't start (and stops) with the stick this far from the facing, so sprint + back just walks back. |
+| Held A / D while sprinting | DA_PlayerMovement > Sprint | Sprint Live Steer Angle | 100° | A and D keep turning the run for as long as they are held. How fast depends on Sprint Turn and Heading Follow Speed. |
 | Aim / crouch speed | DA_PlayerMovement | Aim Speed, Crouch Speed | 150, 200 (Nick, 2026-11-22) | Was 250 / 220. |
 
 ---
@@ -75,6 +76,7 @@ Keep this list up to date: add a line whenever something feels off, and note wha
 | Sprint Acceleration | 1000 | Pick-up into the sprint. |
 | Sprint Turn | 140/60/30 | Facing turn while sprinting; low = wide, committed turns. |
 | Sprint Cancel Input Angle | 150° | With the stick further than this from the facing the sprint stops or won't start (sprint + back walks back). |
+| Sprint Live Steer Angle | 100° | Stick up to this far from forward steers from the live camera, so a held A or D keeps turning while the camera follows (needs Heading Follow Speed above 0). Further back, the run keeps the camera direction from when the stick was pulled back, turned only by look input. Keep below 135 or a held back diagonal circles. |
 
 **Dodge (roll)**
 | Setting | Now | What it does |

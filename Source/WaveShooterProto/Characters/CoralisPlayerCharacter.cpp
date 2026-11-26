@@ -13,6 +13,7 @@
 #include "Input/CoralisInputConfig.h"
 #include "InputActionValue.h"
 #include "Movement/CoralisMovementComponent.h"
+#include "Movement/CoralisMovementSettings.h"
 
 ACoralisPlayerCharacter::ACoralisPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -139,7 +140,9 @@ void ACoralisPlayerCharacter::ApplyMoveInput(const FVector2D& Input)
 		return;
 	}
 	const UCoralisMovementComponent* Move = GetCoralisMovement();
-	if (Move && Move->IsSprinting())
+	// Angle of the stick from straight forward: 0 = forward, 90 = pure sideways, 180 = straight back.
+	const float StickAngle = FMath::Abs(FMath::RadiansToDegrees(FMath::Atan2(Input.X, Input.Y)));
+	if (Move && Move->IsSprinting() && StickAngle > Move->GetSettings()->SprintLiveSteerAngle)
 	{
 		if (!bSprintInputFrameLatched)
 		{

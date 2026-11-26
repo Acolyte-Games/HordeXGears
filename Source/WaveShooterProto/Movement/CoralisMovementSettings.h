@@ -162,6 +162,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sprint", meta = (ClampMin = "0", ClampMax = "180", Units = "Degrees"))
 	float SprintCancelInputAngle = 150.f;
 
+	/**
+	 * Stick directions up to this angle from forward steer the sprint from the live camera, so a held A or D keeps
+	 * turning while the camera follows. Further back, the run keeps the camera direction from when the stick was pulled
+	 * back (turned only by look input). Keep below 135, or a held back diagonal circles with the following camera.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sprint", meta = (ClampMin = "0", ClampMax = "180", Units = "Degrees"))
+	float SprintLiveSteerAngle = 100.f;
+
 	// --- Dodge roll ---
 
 	/** Total ground distance covered by one roll (cm). */
