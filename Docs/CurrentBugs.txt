@@ -1,0 +1,1 @@
+When sprinting A and D control the angle doesn't change more than 45 degrees or so, and when setting the max angle to low number like 10, the turning does go further but slowly but then stops anyways. Should be countinuous.
