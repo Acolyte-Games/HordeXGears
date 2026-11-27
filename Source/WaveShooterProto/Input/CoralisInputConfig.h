@@ -59,6 +59,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actions")
 	TObjectPtr<UInputAction> AimAction;
 
+	/** Hold to fire. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actions")
+	TObjectPtr<UInputAction> FireAction;
+
+	/** Press to vent the weapon's heat. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actions")
+	TObjectPtr<UInputAction> VentAction;
+
 	/** Press to toggle crouch. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actions")
 	TObjectPtr<UInputAction> CrouchAction;

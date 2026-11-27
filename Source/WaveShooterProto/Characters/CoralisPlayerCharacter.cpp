@@ -4,6 +4,7 @@
 
 #include "Camera/CameraComponent.h"
 #include "Camera/CoralisCameraRigComponent.h"
+#include "Combat/CoralisWeaponComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/Engine.h"
@@ -14,6 +15,7 @@
 #include "InputActionValue.h"
 #include "Movement/CoralisMovementComponent.h"
 #include "Movement/CoralisMovementSettings.h"
+#include "UI/CoralisWeaponHUDComponent.h"
 
 ACoralisPlayerCharacter::ACoralisPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -28,6 +30,8 @@ ACoralisPlayerCharacter::ACoralisPlayerCharacter(const FObjectInitializer& Objec
 	FollowCamera->bUsePawnControlRotation = false;
 
 	CameraRig = CreateDefaultSubobject<UCoralisCameraRigComponent>(TEXT("CameraRig"));
+
+	WeaponHUD = CreateDefaultSubobject<UCoralisWeaponHUDComponent>(TEXT("WeaponHUD"));
 }
 
 void ACoralisPlayerCharacter::NotifyControllerChanged()
@@ -93,6 +97,13 @@ void ACoralisPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		Input->BindAction(C->AimAction, ETriggerEvent::Started, this, &ThisClass::OnAimStarted);
 		Input->BindAction(C->AimAction, ETriggerEvent::Completed, this, &ThisClass::OnAimCompleted);
 	}
+	if (C->FireAction)
+	{
+		Input->BindAction(C->FireAction, ETriggerEvent::Started, this, &ThisClass::OnFireStarted);
+		Input->BindAction(C->FireAction, ETriggerEvent::Completed, this, &ThisClass::OnFireCompleted);
+		Input->BindAction(C->FireAction, ETriggerEvent::Canceled, this, &ThisClass::OnFireCompleted);
+	}
+	if (C->VentAction) { Input->BindAction(C->VentAction, ETriggerEvent::Started, this, &ThisClass::OnVent); }
 	if (C->CrouchAction) { Input->BindAction(C->CrouchAction, ETriggerEvent::Started, this, &ThisClass::OnCrouch); }
 	if (C->ShoulderSwapAction) { Input->BindAction(C->ShoulderSwapAction, ETriggerEvent::Started, this, &ThisClass::OnShoulderSwap); }
 	if (C->InvertMouseLookAction) { Input->BindAction(C->InvertMouseLookAction, ETriggerEvent::Started, this, &ThisClass::OnInvertMouseLook); }
@@ -267,6 +278,21 @@ void ACoralisPlayerCharacter::OnAimStarted(const FInputActionValue& Value)
 void ACoralisPlayerCharacter::OnAimCompleted(const FInputActionValue& Value)
 {
 	SetAiming(false);
+}
+
+void ACoralisPlayerCharacter::OnFireStarted(const FInputActionValue& Value)
+{
+	GetWeapon()->StartFire();
+}
+
+void ACoralisPlayerCharacter::OnFireCompleted(const FInputActionValue& Value)
+{
+	GetWeapon()->StopFire();
+}
+
+void ACoralisPlayerCharacter::OnVent(const FInputActionValue& Value)
+{
+	GetWeapon()->Vent();
 }
 
 void ACoralisPlayerCharacter::OnCrouch(const FInputActionValue& Value)

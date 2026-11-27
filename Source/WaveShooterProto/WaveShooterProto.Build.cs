@@ -19,6 +19,6 @@ public class WaveShooterProto : ModuleRules
 			"GameplayTags"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "NetCore", "AnimGraphRuntime" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "NetCore", "AnimGraphRuntime", "UMG", "Slate", "SlateCore" });
 	}
 }
