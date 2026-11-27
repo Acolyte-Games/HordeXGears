@@ -9,6 +9,7 @@
 #include "CoralisCharacterBase.generated.h"
 
 class UCoralisMovementComponent;
+class UCoralisWeaponComponent;
 
 /** Movement state other machines need for animation. Owning client and server run the real simulation instead. */
 USTRUCT(BlueprintType)
@@ -50,6 +51,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCoralisDodgeStartedSignature, FVect
  * Shared body for players and enemies: movement and its replicated state.
  * Players add camera and input in ACoralisPlayerCharacter; enemy Blueprints can parent straight to this.
  * Health, hit zones, weapon and aggro come in as components, not as code in this class.
+ * The weapon component is always there; it can't shoot until it is given weapon settings.
  */
 UCLASS(Abstract, Blueprintable)
 class WAVESHOOTERPROTO_API ACoralisCharacterBase : public ACharacter, public IGameplayTagAssetInterface
@@ -64,6 +66,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Coralis|Movement")
 	UCoralisMovementComponent* GetCoralisMovement() const;
+
+	UFUNCTION(BlueprintPure, Category = "Coralis|Weapon")
+	UCoralisWeaponComponent* GetWeapon() const { return Weapon; }
 
 	// --- Movement verbs (players call these from input, AI from its tasks) ---
 
@@ -95,6 +100,9 @@ public:
 	FCoralisDodgeStartedSignature OnDodgeStarted;
 
 protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Coralis|Weapon")
+	TObjectPtr<UCoralisWeaponComponent> Weapon;
+
 	/** Plays the roll animation from the movement settings. Override in Blueprint to replace. */
 	UFUNCTION(BlueprintNativeEvent, Category = "Coralis|Movement")
 	void PlayDodgeCosmetics(FVector Direction);

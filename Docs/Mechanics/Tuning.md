@@ -37,6 +37,7 @@ Keep this list up to date: add a line whenever something feels off, and note wha
 | Sprint + back | DA_PlayerMovement > Sprint | Sprint Cancel Input Angle | 150° | Sprint can't start (and stops) with the stick this far from the facing, so sprint + back just walks back. |
 | Held A / D while sprinting | DA_PlayerMovement > Sprint | Sprint Live Steer Angle | 100° | A and D keep turning the run for as long as they are held. How fast depends on Sprint Turn and Heading Follow Speed. |
 | Aim / crouch speed | DA_PlayerMovement | Aim Speed, Crouch Speed | 150, 200 (Nick, 2026-11-22) | Was 250 / 220. |
+| Weapon sounds | DA_PlasmaRifle | Fire Sound | RifleShot | Placeholder: replace the sounds later. |
 
 ---
 
@@ -175,3 +176,102 @@ already line up. (`MDT_Mannequin` mirror table is left over from a mirrored-left
 | Sprint Lean Degrees Per Bone | 15° | Forward bend on each of spine_01..03 (45° total). |
 
 The anim Blueprint also has **Root Motion Mode = Ignore Root Motion** (rolls are driven by code, not the animation). Leave it.
+
+---
+
+# Rifle and heat tuning
+
+Test it in `Lvl_NickMovementTest`: the three target dummies show their health and the last hit.
+Console: `Coralis.Weapon.SetHeat 0.65` (0 to 1), `Coralis.Weapon.Fire`, `Coralis.Weapon.Vent`,
+`Coralis.Weapon.ShowDebug 1` (heat and sweet spot window on screen).
+
+**Heat rules**
+- Each shot adds heat. Passive cooling starts after a short delay.
+- Full heat jams the rifle for a fixed time. Vent does nothing during a jam, and the trigger must be pulled again afterwards.
+- Vent can be tapped at any heat above zero. A vent always runs down to zero, and the rifle can't fire until it gets
+  there. By default the trigger has to be pulled again after a vent.
+- Pressing vent while the heat is inside the marked window is a sweet spot: faster cooling and a damage buff. Outside
+  the window it is a normal vent. There is one attempt per vent. The buff starts at the press.
+- The window lands at a random place between 60% and 96% heat. It moves after every vent and every jam. Cooling on its
+  own doesn't move it. The marks are hidden while venting or jammed.
+- Cooling must stay ordered, slowest first: jam < passive < vent < sweet spot (data validation on the asset checks
+  this, and that the window fits its range).
+
+## DA_PlasmaRifle (`Content/Mechanics/Data/DA_PlasmaRifle`)
+
+| Setting | Now | What it does |
+|---|---|---|
+| Fire Rate | 9 shots/s | Rate while the trigger is held. |
+| Damage | 12 | Damage of a body hit, before zone and buff multipliers. |
+| Range | 10000 cm | Longest shot. |
+| Trace Channel | GameTraceChannel1 | Collision channel the shots trace on. |
+| Friendly Fire | off | Whether shots damage other players. |
+| Muzzle Offset | (50, 25, 35) | Shot origin from the character: forward, right, up. Cover between it and the aim point blocks the shot. |
+| Max Heat / Heat Per Shot | 100 / 4 | 25 shots from cold to a jam. |
+| Passive Cool Delay / Rate | 1 s / 35 per s | Cooling when left alone. |
+| Jam Duration | 4 s | Lockout at full heat (cools 100 in this time, so 25 per s). |
+| New Trigger Pull After Jam | on | Off = a held trigger starts firing again when the jam ends. |
+| New Trigger Pull After Vent | on | Off = a held trigger starts firing as soon as the vent reaches zero. |
+| Vent Cool Rate | 55 per s | Normal vent. |
+| Sweet Spot Range Start / End | 0.6 / 0.96 | The window lands at random inside this range (fraction of max heat). 0.96 is the highest heat that doesn't jam at 4 per shot. |
+| Sweet Spot Width | 0.2 | Size of the window as a fraction of max heat. 0 = no sweet spot. |
+| Sweet Spot Cool Rate | 110 per s | Cooling after a sweet spot. |
+| Buff Damage Multiplier / Duration | 1.35 / 5 s | Sweet spot damage buff. |
+| Hip Spread / Aim Spread | 2.5° / 0.5° | Half angle of the shot cone. |
+| Recoil Pitch / Yaw | 0.3° / 0.15° | Camera kick per shot (yaw is random to either side). |
+| Aim Recoil Scale | 0.7 | Recoil multiplier while aiming. |
+| Fire Sound | RifleShot (`Content/SFX/GunsSFX/Rifle`) | Played on each shot. Placeholder, to be replaced. |
+| Tracer Duration / Color | 0.05 s / (80, 220, 255) | Placeholder tracer. |
+| Max Aim Origin Distance | 700 cm | Network check: how far from the character a client's shot may start. |
+| Client Clock Tolerance | 0.25 s | Network check: allowed drift in the timing of a client's shots and vents. |
+| Server Move State Grace | 0.25 s | How long the server waits for a client's movement state (for example sprint ended) before refusing a shot. |
+
+## DA_HitZones_Humanoid (`Content/Mechanics/Data/DA_HitZones_Humanoid`)
+
+| Zone | Damage multiplier | Bones (and everything below them) |
+|---|---|---|
+| Head | 2.0 | head, neck_01 |
+| Arm | 0.7 | upperarm_l, upperarm_r |
+| Leg | 0.7 | thigh_l, thigh_r |
+| Body | 1.0 | everything else |
+
+Zones come from the bodies of the character's physics asset.
+
+## Health (Coralis Health component) and target dummy
+
+| Setting | Where | Now |
+|---|---|---|
+| Max Health | Health component | 100 |
+| Hit Zones | Health component | DA_HitZones_Humanoid on the dummy |
+| Reset Delay | BP_TargetDummy (`Content/Developers/Nick`) | 2 s until its health refills |
+
+## HUD and crosshair (BP_CoralisPlayer > Weapon HUD component)
+
+The heat bar and label are the ones in `Content/UI/HUD/WBP_WeaponHUD`, fed from code. In that widget the label sits on
+its own line above the bar, so the bar keeps its size whatever the text says. Bar height: Height Override on `SizeBox_0`
+(27), the box around the bar.
+
+| Setting | Now | What it does |
+|---|---|---|
+| HUD Widget Class, HUD Z Order | WBP_WeaponHUD, 0 | Which HUD is created for the local player. |
+| Heat Bar Name / Heat Label Name | ProgressBar_Heat / Txt_HeatLabel | Names looked up inside that widget. |
+| Ready / Venting / Sweet Spot / Jammed Text | HEAT / VENTING / SWEET SPOT / JAMMED | Label text per state. |
+| Buff Suffix | "  +DMG {Seconds}s" | Added to the label while the buff runs. |
+| Ready / Venting / Sweet Spot / Jammed Color | orange / blue / green / red | Bar color per state. |
+| Crosshair Z Order | 10 | Draw order of the crosshair overlay. |
+
+**Crosshair** (same component, `Crosshair` group)
+
+| Setting | Now |
+|---|---|
+| Line Length, Thickness | 8, 2 |
+| Hip Gap / Aim Gap | 14 / 5 |
+| Color / Blocked Color (sprinting, rolling, venting, jammed) | white 85% / white 25% |
+| Outline Color, Outline Width | black 70%, 1 |
+| Hit Marker Duration, Inner, Outer | 0.18 s, 7, 15 |
+| Hit / Head Hit / Limb Hit / Depleted Color | white / yellow / pale blue / red |
+| Sweet Spot Mark Color, Thickness, Overhang | green, 2, 3 |
+
+**Keys:** fire LMB / RT, aim RMB / LT, vent R / X (`IMC_Coralis_KBM` / `IMC_Coralis_Gamepad`).
+
+**Not done yet:** shots start on the right side even when the camera is over the left shoulder.

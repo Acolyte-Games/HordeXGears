@@ -11,4 +11,7 @@ namespace CoralisTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Movement_Recovering, "Coralis.Movement.Recovering", "Recovery window after a dodge.");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Movement_Falling, "Coralis.Movement.Falling", "Airborne.");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Movement_InCover, "Coralis.Movement.InCover", "Attached to cover.");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_Venting, "Coralis.Weapon.Venting", "Weapon is venting heat.");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_Jammed, "Coralis.Weapon.Jammed", "Weapon is locked after overheating.");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_Buffed, "Coralis.Weapon.Buffed", "Sweet spot damage buff active.");
 }

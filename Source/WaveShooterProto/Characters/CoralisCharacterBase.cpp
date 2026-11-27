@@ -4,6 +4,8 @@
 
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimSequenceBase.h"
+#include "Combat/CoralisWeaponComponent.h"
+#include "Core/CoralisGameplayTags.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/Engine.h"
 #include "HAL/IConsoleManager.h"
@@ -41,6 +43,8 @@ ACoralisCharacterBase::ACoralisCharacterBase(const FObjectInitializer& ObjectIni
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationRoll = false;
+
+	Weapon = CreateDefaultSubobject<UCoralisWeaponComponent>(TEXT("Weapon"));
 }
 
 void ACoralisCharacterBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -148,6 +152,22 @@ void ACoralisCharacterBase::GetOwnedGameplayTags(FGameplayTagContainer& TagConta
 	if (const UCoralisMovementComponent* Move = GetCoralisMovement())
 	{
 		Move->GetMovementStateTags(TagContainer);
+	}
+	if (Weapon && Weapon->Settings)
+	{
+		const ECoralisHeatPhase Phase = Weapon->GetHeatPhase();
+		if (Phase == ECoralisHeatPhase::Venting || Phase == ECoralisHeatPhase::SweetVenting)
+		{
+			TagContainer.AddTag(CoralisTags::Weapon_Venting);
+		}
+		if (Phase == ECoralisHeatPhase::Jammed)
+		{
+			TagContainer.AddTag(CoralisTags::Weapon_Jammed);
+		}
+		if (Weapon->IsBuffActive())
+		{
+			TagContainer.AddTag(CoralisTags::Weapon_Buffed);
+		}
 	}
 }
 

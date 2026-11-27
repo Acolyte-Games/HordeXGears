@@ -9,6 +9,7 @@
 class UCameraComponent;
 class UCoralisCameraRigComponent;
 class UCoralisInputConfig;
+class UCoralisWeaponHUDComponent;
 class USpringArmComponent;
 struct FInputActionValue;
 
@@ -49,6 +50,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Coralis|Camera")
 	TObjectPtr<UCoralisCameraRigComponent> CameraRig;
 
+	/** Heat bar, crosshair and hit marker of the local player. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Coralis|Weapon")
+	TObjectPtr<UCoralisWeaponHUDComponent> WeaponHUD;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Coralis|Input")
 	TObjectPtr<UCoralisInputConfig> InputConfig;
 
@@ -67,6 +72,9 @@ private:
 	void OnAimStarted(const FInputActionValue& Value);
 	void OnAimCompleted(const FInputActionValue& Value);
 	void OnCrouch(const FInputActionValue& Value);
+	void OnFireStarted(const FInputActionValue& Value);
+	void OnFireCompleted(const FInputActionValue& Value);
+	void OnVent(const FInputActionValue& Value);
 	void OnShoulderSwap(const FInputActionValue& Value);
 	void OnInvertMouseLook(const FInputActionValue& Value);
 
