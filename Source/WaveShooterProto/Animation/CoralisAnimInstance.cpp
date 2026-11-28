@@ -21,6 +21,7 @@ void UCoralisAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	LocoSpeed = Velocity.Size2D();
 	LocoDirection = LocoSpeed > MoveSpeedThreshold ? UKismetAnimationLibrary::CalculateDirection(Velocity, Character->GetActorRotation()) : 0.f;
 	bLocoFalling = Move->IsFalling();
+	UpdateMirror(Character->IsLeftHanded());
 
 	// Proxies have no acceleration; treat speed alone as intent there.
 	const bool bHasAccel = Character->GetLocalRole() == ROLE_SimulatedProxy || !Move->GetCurrentAcceleration().IsNearlyZero();
@@ -48,6 +49,34 @@ void UCoralisAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	Character->GetOwnedGameplayTags(StateTags);
 }
 
+void UCoralisAnimInstance::UpdateMirror(bool bLeftHanded)
+{
+	// Everything that picks and turns the leg clips works on the unmirrored pose, so with the pose mirrored it has to
+	// be fed the travel direction flipped left to right. The graph flips the result back.
+	ClipDirection = bLeftHanded ? FRotator::NormalizeAxis(-LocoDirection) : LocoDirection;
+	if (bMirrorPose == bLeftHanded)
+	{
+		return;
+	}
+	bMirrorPose = bLeftHanded;
+	// Carry the held directions over to the other side at once; the graph's inertialization smooths the change.
+	LocoCardinalAngle = FRotator::NormalizeAxis(-LocoCardinalAngle);
+	LocoBlendDirection = FRotator::NormalizeAxis(-LocoBlendDirection);
+	LastTravelDirection = FRotator::NormalizeAxis(-LastTravelDirection);
+	LocoWarpAngle = -LocoWarpAngle;
+	LocoWarpForward = -LocoWarpForward;
+	LocoWarpBack = -LocoWarpBack;
+	const float OldRight = LocoWarpRight;
+	LocoWarpRight = -LocoWarpLeft;
+	LocoWarpLeft = -OldRight;
+	if (LocoCardinalIndex == 1 || LocoCardinalIndex == 3)
+	{
+		LocoCardinalIndex = 4 - LocoCardinalIndex;
+	}
+	bHadCardinal = false;
+	bHadBlendDirection = false;
+}
+
 void UCoralisAnimInstance::UpdateCardinal(bool bMoving)
 {
 	if (!bMoving)
@@ -71,7 +100,7 @@ void UCoralisAnimInstance::UpdateCardinal(bool bMoving)
 	float BestScore = TNumericLimits<float>::Max();
 	for (int32 i = 0; i < UE_ARRAY_COUNT(Cardinals); ++i)
 	{
-		const float S = bAllowed[i] ? Score(Cardinals[i], LocoDirection) : TNumericLimits<float>::Max();
+		const float S = bAllowed[i] ? Score(Cardinals[i], ClipDirection) : TNumericLimits<float>::Max();
 		if (S < BestScore)
 		{
 			BestScore = S;
@@ -79,7 +108,7 @@ void UCoralisAnimInstance::UpdateCardinal(bool bMoving)
 		}
 	}
 	// Keep the current cardinal until another one is clearly better.
-	if (!bHadCardinal || BestScore + CardinalHysteresis < Score(LocoCardinalAngle, LocoDirection))
+	if (!bHadCardinal || BestScore + CardinalHysteresis < Score(LocoCardinalAngle, ClipDirection))
 	{
 		LocoCardinalAngle = Best;
 	}
@@ -97,7 +126,7 @@ void UCoralisAnimInstance::UpdateBlendDirection(bool bMoving, float DeltaSeconds
 		return;
 	}
 	// Aiming uses the 8-way blendspace directly; otherwise the cardinal set plus leg warping.
-	const float Target = bAiming ? LocoDirection : LocoCardinalAngle;
+	const float Target = bAiming ? ClipDirection : LocoCardinalAngle;
 	if (!bHadBlendDirection)
 	{
 		LocoBlendDirection = Target;
@@ -109,7 +138,7 @@ void UCoralisAnimInstance::UpdateBlendDirection(bool bMoving, float DeltaSeconds
 		float Delta = FMath::FindDeltaAngleDegrees(LocoBlendDirection, Target);
 		// If the short way round would swing through the direction opposite to travel (e.g. back -> forward while
 		// moving left would pass through right), go the other way so the legs never point away from where they go.
-		const float ToOpposite = FMath::FindDeltaAngleDegrees(LocoBlendDirection, LocoDirection + 180.f);
+		const float ToOpposite = FMath::FindDeltaAngleDegrees(LocoBlendDirection, ClipDirection + 180.f);
 		if (FMath::Sign(ToOpposite) == FMath::Sign(Delta) && FMath::Abs(ToOpposite) < FMath::Abs(Delta))
 		{
 			Delta -= FMath::Sign(Delta) * 360.f;
@@ -119,7 +148,7 @@ void UCoralisAnimInstance::UpdateBlendDirection(bool bMoving, float DeltaSeconds
 	// Not aiming, the legs play one discrete clip (forward / right / back / left), so turn them by what is left
 	// between that clip and the travel direction. Aiming uses the 8-way blendspace (the warp is zeroed in the graph).
 	const float WarpBase = bAiming ? LocoBlendDirection : LocoCardinalAngle;
-	const float Warp = FMath::Clamp(FMath::FindDeltaAngleDegrees(WarpBase, LocoDirection), -MaxWarpAngle, MaxWarpAngle);
+	const float Warp = FMath::Clamp(FMath::FindDeltaAngleDegrees(WarpBase, ClipDirection), -MaxWarpAngle, MaxWarpAngle);
 	// The legs turn in gradually and only fully once moving at pace, so starts and stops don't snap the hips.
 	const float SpeedWeight = WarpFullSpeed > 0.f ? FMath::Clamp(LocoSpeed / WarpFullSpeed, 0.f, 1.f) : 1.f;
 	LocoWarpAngle = FMath::FInterpConstantTo(LocoWarpAngle, Warp * SpeedWeight, DeltaSeconds, WarpTurnRate);
@@ -139,7 +168,7 @@ void UCoralisAnimInstance::UpdateClipWarps(bool bMoving, float DeltaSeconds)
 {
 	if (bMoving)
 	{
-		LastTravelDirection = LocoDirection;
+		LastTravelDirection = ClipDirection;
 	}
 	auto Step = [this, DeltaSeconds](float& Warp, float ClipAngle, float Limit)
 	{

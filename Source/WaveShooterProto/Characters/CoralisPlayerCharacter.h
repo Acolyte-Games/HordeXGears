@@ -8,6 +8,8 @@
 
 class UCameraComponent;
 class UCoralisCameraRigComponent;
+class UCoralisHealthHUDComponent;
+class UCoralisWaveHUDComponent;
 class UCoralisInputConfig;
 class UCoralisWeaponHUDComponent;
 class USpringArmComponent;
@@ -35,10 +37,27 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Coralis|Debug")
 	FVector2D GetDebugMoveInput() const { return DebugMoveInput; }
 
+	/** Placeholder until the game flow decides this: seconds after death until the player is back. 0 = stays dead. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Coralis|Death", meta = (ClampMin = "0", Units = "Seconds"))
+	float RespawnDelay = 6.f;
+
+	/** Server: replaces this body with a fresh one at a player start. */
+	UFUNCTION(BlueprintCallable, Category = "Coralis|Death")
+	void Respawn();
+
+	/** Server: stops the Respawn Delay timer, for a game flow that decides itself when the player comes back. */
+	UFUNCTION(BlueprintCallable, Category = "Coralis|Death")
+	void CancelPendingRespawn();
+
+	/** Swapping the camera shoulder also moves the weapon to that side. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Coralis|Stance")
+	bool bSwitchHandsWithShoulder = true;
+
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void NotifyControllerChanged() override;
 
 protected:
+	virtual void HandleDeath(AController* Killer) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Coralis|Camera")
@@ -54,10 +73,20 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Coralis|Weapon")
 	TObjectPtr<UCoralisWeaponHUDComponent> WeaponHUD;
 
+	/** Health bar of the local player. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Coralis|Health")
+	TObjectPtr<UCoralisHealthHUDComponent> HealthHUD;
+
+	/** Wave number, enemies left and countdown, for the local player. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Coralis|HUD")
+	TObjectPtr<UCoralisWaveHUDComponent> WaveHUD;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Coralis|Input")
 	TObjectPtr<UCoralisInputConfig> InputConfig;
 
 private:
+	FTimerHandle RespawnTimer;
+
 	void AddMappingContexts();
 	void ApplyMoveInput(const FVector2D& Input);
 

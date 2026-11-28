@@ -66,6 +66,8 @@ namespace
 #endif
 }
 
+FCoralisServerShotSignature UCoralisWeaponComponent::OnServerShot;
+
 UCoralisWeaponComponent::UCoralisWeaponComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -119,7 +121,7 @@ void UCoralisWeaponComponent::StopFire()
 
 void UCoralisWeaponComponent::Vent()
 {
-	if (!Settings || !IsLocallyControlledOwner())
+	if (!Settings || !IsLocallyControlledOwner() || IsOwnerDead())
 	{
 		return;
 	}
@@ -280,7 +282,13 @@ void UCoralisWeaponComponent::GetShotView(FVector& OutOrigin, FVector& OutDirect
 FVector UCoralisWeaponComponent::GetMuzzleLocation(const FVector& AimDirection) const
 {
 	const FRotator YawOnly(0.f, AimDirection.Rotation().Yaw, 0.f);
-	return GetOwner()->GetActorLocation() + YawOnly.RotateVector(Settings->MuzzleOffset);
+	FVector Offset = Settings->MuzzleOffset;
+	const ACoralisCharacterBase* Character = Cast<ACoralisCharacterBase>(GetOwner());
+	if (Character && Character->IsLeftHanded())
+	{
+		Offset.Y = -Offset.Y;
+	}
+	return GetOwner()->GetActorLocation() + YawOnly.RotateVector(Offset);
 }
 
 bool UCoralisWeaponComponent::TraceShot(const FVector& Origin, const FVector& Direction, FHitResult& OutHit, FVector& OutMuzzle, FVector& OutEnd) const
@@ -321,17 +329,19 @@ void UCoralisWeaponComponent::ResolveShot(const FVector& Origin, const FVector& 
 	MulticastShot(Muzzle, End);
 
 	AActor* Target = bHit ? Hit.GetActor() : nullptr;
+	OnServerShot.Broadcast(*this, Muzzle, End, Target);
 	if (!Target)
 	{
 		return;
 	}
 	const APawn* TargetPawn = Cast<APawn>(Target);
-	if (!Settings->bFriendlyFire && TargetPawn && TargetPawn->IsPlayerControlled())
+	const APawn* Shooter = Cast<APawn>(GetOwner());
+	// Two sides for now: player controlled pawns and every other pawn.
+	if (!Settings->bFriendlyFire && TargetPawn && Shooter && TargetPawn->IsPlayerControlled() == Shooter->IsPlayerControlled())
 	{
 		return;
 	}
 
-	const APawn* Shooter = Cast<APawn>(GetOwner());
 	AController* ShooterController = Shooter ? Shooter->GetController() : nullptr;
 	const float Damage = Settings->Damage * (bBuffed ? Settings->BuffDamageMultiplier : 1.f);
 
@@ -354,7 +364,12 @@ void UCoralisWeaponComponent::ResolveShot(const FVector& Origin, const FVector& 
 	else
 	{
 		// Anything without Coralis health still gets ordinary engine damage.
-		UGameplayStatics::ApplyPointDamage(Target, Damage, Direction, Hit, ShooterController, GetOwner(), nullptr);
+		const float Taken = UGameplayStatics::ApplyPointDamage(Target, Damage, Direction, Hit, ShooterController, GetOwner(), nullptr);
+		// Walls also accept engine damage, so only a pawn counts as a hit. One that destroys itself when hit counts as a kill.
+		if (TargetPawn && Taken > 0.f)
+		{
+			ClientConfirmHit(Taken, ECoralisHitZone::Body, Target->IsActorBeingDestroyed());
+		}
 	}
 }
 
@@ -483,7 +498,7 @@ void UCoralisWeaponComponent::ProcessPendingInputs()
 		bool bAccepted = false;
 		if (Input.bVent)
 		{
-			bAccepted = Heat.TryVent(Input.ClientTime, *Settings);
+			bAccepted = !IsOwnerDead() && Heat.TryVent(Input.ClientTime, *Settings);
 			if (bAccepted)
 			{
 				OnVentStarted.Broadcast(Heat.Phase == ECoralisHeatPhase::SweetVenting);
@@ -612,8 +627,18 @@ bool UCoralisWeaponComponent::IsLocallyControlledOwner() const
 	return Pawn ? Pawn->IsLocallyControlled() : (GetOwner() && GetOwner()->HasAuthority());
 }
 
+bool UCoralisWeaponComponent::IsOwnerDead() const
+{
+	const UCoralisHealthComponent* Health = GetOwner() ? GetOwner()->FindComponentByClass<UCoralisHealthComponent>() : nullptr;
+	return Health && Health->HasBegunPlay() && Health->IsDepleted();
+}
+
 bool UCoralisWeaponComponent::CanOwnerUseWeapon() const
 {
+	if (IsOwnerDead())
+	{
+		return false;
+	}
 	const ACoralisCharacterBase* Character = Cast<ACoralisCharacterBase>(GetOwner());
 	const UCoralisMovementComponent* Move = Character ? Character->GetCoralisMovement() : nullptr;
 	return !Move || Move->CanUseWeapon();

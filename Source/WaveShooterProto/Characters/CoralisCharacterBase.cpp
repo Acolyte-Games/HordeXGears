@@ -4,7 +4,10 @@
 
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimSequenceBase.h"
+#include "Combat/CoralisHealthComponent.h"
 #include "Combat/CoralisWeaponComponent.h"
+#include "Combat/CoralisWeaponSettings.h"
+#include "Components/CapsuleComponent.h"
 #include "Core/CoralisGameplayTags.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/Engine.h"
@@ -45,12 +48,100 @@ ACoralisCharacterBase::ACoralisCharacterBase(const FObjectInitializer& ObjectIni
 	bUseControllerRotationRoll = false;
 
 	Weapon = CreateDefaultSubobject<UCoralisWeaponComponent>(TEXT("Weapon"));
+	Health = CreateDefaultSubobject<UCoralisHealthComponent>(TEXT("Health"));
 }
 
 void ACoralisCharacterBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME_CONDITION(ACoralisCharacterBase, ReplicatedMoveState, COND_SimulatedOnly);
+	DOREPLIFETIME(ACoralisCharacterBase, bDead);
+	DOREPLIFETIME_CONDITION(ACoralisCharacterBase, bLeftHanded, COND_SkipOwner);
+}
+
+void ACoralisCharacterBase::SetLeftHanded(bool bNewLeftHanded)
+{
+	if (bLeftHanded == bNewLeftHanded)
+	{
+		return;
+	}
+	bLeftHanded = bNewLeftHanded;
+	if (!HasAuthority() && IsLocallyControlled())
+	{
+		ServerSetLeftHanded(bNewLeftHanded);
+	}
+}
+
+void ACoralisCharacterBase::ServerSetLeftHanded_Implementation(bool bNewLeftHanded)
+{
+	bLeftHanded = bNewLeftHanded;
+}
+
+void ACoralisCharacterBase::BeginPlay()
+{
+	Super::BeginPlay();
+	if (HasAuthority() && Health)
+	{
+		Health->OnDepleted.AddUniqueDynamic(this, &ThisClass::HandleHealthDepleted);
+	}
+}
+
+void ACoralisCharacterBase::HandleHealthDepleted(AController* Killer)
+{
+	if (bDead)
+	{
+		return;
+	}
+	bDead = true;
+	ApplyDeath();
+	if (CorpseLifeSpan > 0.f)
+	{
+		SetLifeSpan(CorpseLifeSpan);
+	}
+	ForceNetUpdate();
+	HandleDeath(Killer);
+	OnDied.Broadcast(Killer);
+}
+
+void ACoralisCharacterBase::OnRep_Dead()
+{
+	if (bDead)
+	{
+		ApplyDeath();
+	}
+}
+
+void ACoralisCharacterBase::ApplyDeath()
+{
+	if (Weapon)
+	{
+		Weapon->StopFire();
+	}
+	if (UCoralisMovementComponent* Move = GetCoralisMovement())
+	{
+		Move->SetWantsToSprint(false);
+		Move->SetWantsToAim(false);
+		Move->StopMovementImmediately();
+		Move->DisableMovement();
+	}
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+	if (USkeletalMeshComponent* Body = GetMesh())
+	{
+		if (bRagdollOnDeath && Body->GetPhysicsAsset())
+		{
+			Body->SetCollisionProfileName(RagdollProfileName);
+			Body->SetSimulatePhysics(true);
+		}
+		// A body must not stop shots.
+		if (Weapon && Weapon->Settings)
+		{
+			Body->SetCollisionResponseToChannel(Weapon->Settings->TraceChannel, ECR_Ignore);
+		}
+	}
+	ReceiveDeathCosmetics();
 }
 
 UCoralisMovementComponent* ACoralisCharacterBase::GetCoralisMovement() const
@@ -105,7 +196,7 @@ float ACoralisCharacterBase::GetAimYawOffset() const
 
 void ACoralisCharacterBase::SetSprinting(bool bWantsToSprint)
 {
-	if (UCoralisMovementComponent* Move = GetCoralisMovement())
+	if (UCoralisMovementComponent* Move = bDead ? nullptr : GetCoralisMovement())
 	{
 		if (bWantsToSprint && bIsCrouched)
 		{
@@ -117,7 +208,7 @@ void ACoralisCharacterBase::SetSprinting(bool bWantsToSprint)
 
 void ACoralisCharacterBase::SetAiming(bool bWantsToAim)
 {
-	if (UCoralisMovementComponent* Move = GetCoralisMovement())
+	if (UCoralisMovementComponent* Move = bDead ? nullptr : GetCoralisMovement())
 	{
 		Move->SetWantsToAim(bWantsToAim);
 	}
@@ -125,6 +216,10 @@ void ACoralisCharacterBase::SetAiming(bool bWantsToAim)
 
 void ACoralisCharacterBase::ToggleCrouch()
 {
+	if (bDead)
+	{
+		return;
+	}
 	if (bIsCrouched || (GetCharacterMovement() && GetCharacterMovement()->bWantsToCrouch))
 	{
 		UnCrouch();
@@ -141,7 +236,7 @@ void ACoralisCharacterBase::ToggleCrouch()
 
 void ACoralisCharacterBase::Dodge(FVector DirectionOverride)
 {
-	if (UCoralisMovementComponent* Move = GetCoralisMovement())
+	if (UCoralisMovementComponent* Move = bDead ? nullptr : GetCoralisMovement())
 	{
 		Move->RequestDodge(DirectionOverride);
 	}
