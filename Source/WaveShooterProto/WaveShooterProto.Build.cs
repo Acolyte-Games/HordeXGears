@@ -8,6 +8,8 @@ public class WaveShooterProto : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
+		PublicIncludePaths.Add(ModuleDirectory);
+
 		PublicDependencyModuleNames.AddRange(new string[] {
 			"Core",
 			"CoreUObject",
@@ -17,6 +19,6 @@ public class WaveShooterProto : ModuleRules
 			"GameplayTags"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.AddRange(new string[] { "NetCore", "AnimGraphRuntime" });
 	}
 }
