@@ -4,17 +4,23 @@
 
 #include "Camera/CameraComponent.h"
 #include "Camera/CoralisCameraRigComponent.h"
+#include "Combat/CoralisHealthComponent.h"
 #include "Combat/CoralisWeaponComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/World.h"
+#include "GameFramework/GameModeBase.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Input/CoralisInputConfig.h"
 #include "InputActionValue.h"
 #include "Movement/CoralisMovementComponent.h"
 #include "Movement/CoralisMovementSettings.h"
+#include "TimerManager.h"
+#include "UI/CoralisHealthHUDComponent.h"
+#include "UI/CoralisWaveHUDComponent.h"
 #include "UI/CoralisWeaponHUDComponent.h"
 
 ACoralisPlayerCharacter::ACoralisPlayerCharacter(const FObjectInitializer& ObjectInitializer)
@@ -32,6 +38,44 @@ ACoralisPlayerCharacter::ACoralisPlayerCharacter(const FObjectInitializer& Objec
 	CameraRig = CreateDefaultSubobject<UCoralisCameraRigComponent>(TEXT("CameraRig"));
 
 	WeaponHUD = CreateDefaultSubobject<UCoralisWeaponHUDComponent>(TEXT("WeaponHUD"));
+	HealthHUD = CreateDefaultSubobject<UCoralisHealthHUDComponent>(TEXT("HealthHUD"));
+	WaveHUD = CreateDefaultSubobject<UCoralisWaveHUDComponent>(TEXT("WaveHUD"));
+
+	// Players recover out of combat. Starting values; edit them on the Blueprint's Health component.
+	Health->RegenRate = 20.f;
+	Health->RegenDelay = 5.f;
+}
+
+void ACoralisPlayerCharacter::HandleDeath(AController* Killer)
+{
+	if (RespawnDelay > 0.f)
+	{
+		GetWorldTimerManager().SetTimer(RespawnTimer, this, &ThisClass::Respawn, RespawnDelay, false);
+	}
+}
+
+void ACoralisPlayerCharacter::CancelPendingRespawn()
+{
+	GetWorldTimerManager().ClearTimer(RespawnTimer);
+}
+
+void ACoralisPlayerCharacter::Respawn()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	CancelPendingRespawn();
+	UWorld* World = GetWorld();
+	AGameModeBase* GameMode = World ? World->GetAuthGameMode() : nullptr;
+	AController* OwningController = GetController();
+	if (!GameMode || !OwningController)
+	{
+		return;
+	}
+	OwningController->UnPossess();
+	GameMode->RestartPlayer(OwningController);
+	Destroy();
 }
 
 void ACoralisPlayerCharacter::NotifyControllerChanged()
@@ -116,6 +160,10 @@ void ACoralisPlayerCharacter::Tick(float DeltaSeconds)
 	if (CameraRig && IsLocallyControlled())
 	{
 		CameraRig->ApplyHeadingFollow(DeltaSeconds);
+		if (bSwitchHandsWithShoulder)
+		{
+			SetLeftHanded(!CameraRig->IsOnRightShoulder());
+		}
 	}
 
 #if !UE_BUILD_SHIPPING

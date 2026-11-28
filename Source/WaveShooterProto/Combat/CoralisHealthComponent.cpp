@@ -4,13 +4,52 @@
 
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/Controller.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
+#include "HAL/IConsoleManager.h"
 #include "Net/UnrealNetwork.h"
+
+#if !UE_BUILD_SHIPPING
+namespace
+{
+	UCoralisHealthComponent* FindLocalHealth(const UWorld* World)
+	{
+		const APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+		const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+		return Pawn ? Pawn->FindComponentByClass<UCoralisHealthComponent>() : nullptr;
+	}
+
+	FAutoConsoleCommandWithWorldAndArgs CmdDamage(
+		TEXT("Coralis.Health.Damage"), TEXT("Damages your character by the given amount."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (UCoralisHealthComponent* Health = FindLocalHealth(World); Health && Args.Num() > 0)
+			{
+				Health->DebugDamage(FCString::Atof(*Args[0]));
+			}
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs CmdKill(
+		TEXT("Coralis.Health.Kill"), TEXT("Takes all of your character's health."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (UCoralisHealthComponent* Health = FindLocalHealth(World))
+			{
+				Health->DebugDamage(Health->MaxHealth);
+			}
+		}));
+}
+#endif
 
 UCoralisHealthComponent::UCoralisHealthComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	// Only ticks on the server while there is health to regenerate.
+	PrimaryComponentTick.bStartWithTickEnabled = false;
 	SetIsReplicatedByDefault(true);
 }
 
@@ -107,7 +146,7 @@ void UCoralisHealthComponent::HandleAnyDamage(AActor* DamagedActor, float Damage
 
 float UCoralisHealthComponent::TakeHealth(float Amount, ECoralisHitZone Zone, const FVector& Location, AController* InstigatorController)
 {
-	if (!GetOwner() || !GetOwner()->HasAuthority() || Amount <= 0.f || IsDepleted())
+	if (!GetOwner() || !GetOwner()->HasAuthority() || bInvulnerable || Amount <= 0.f || IsDepleted())
 	{
 		return 0.f;
 	}
@@ -117,6 +156,12 @@ float UCoralisHealthComponent::TakeHealth(float Amount, ECoralisHitZone Zone, co
 	LastDamage.Zone = Zone;
 	LastDamage.Location = Location;
 	++LastDamage.Count;
+	LastInstigator = InstigatorController;
+	if (RegenRate > 0.f && GetWorld())
+	{
+		RegenStartTime = GetWorld()->GetTimeSeconds() + RegenDelay;
+		SetComponentTickEnabled(true);
+	}
 	// RepNotifies don't run on the server.
 	OnRep_Health();
 	OnRep_LastDamage();
@@ -125,6 +170,48 @@ float UCoralisHealthComponent::TakeHealth(float Amount, ECoralisHitZone Zone, co
 		OnDepleted.Broadcast(InstigatorController);
 	}
 	return Taken;
+}
+
+void UCoralisHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (IsDepleted() || Health >= MaxHealth || RegenRate <= 0.f)
+	{
+		SetComponentTickEnabled(false);
+		return;
+	}
+	if (GetWorld() && GetWorld()->GetTimeSeconds() >= RegenStartTime)
+	{
+		Health = FMath::Min(MaxHealth, Health + RegenRate * DeltaTime);
+		OnRep_Health();
+	}
+}
+
+void UCoralisHealthComponent::DebugDamage(float Amount)
+{
+#if !UE_BUILD_SHIPPING
+	if (!GetOwner())
+	{
+		return;
+	}
+	if (GetOwner()->HasAuthority())
+	{
+		TakeHealth(Amount, ECoralisHitZone::Body, GetOwner()->GetActorLocation(), nullptr);
+	}
+	else
+	{
+		ServerDebugDamage(Amount);
+	}
+#endif
+}
+
+void UCoralisHealthComponent::ServerDebugDamage_Implementation(float Amount)
+{
+	// Editor scripts run RPCs on the calling machine; without this a client would call itself until the stack overflows.
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		DebugDamage(Amount);
+	}
 }
 
 void UCoralisHealthComponent::ResetHealth()

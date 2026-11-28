@@ -96,6 +96,14 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Coralis|Locomotion")
 	float AimPitch = 0.f;
 
+	/**
+	 * The graph mirrors the whole pose to hold the weapon on the left side. While set, the leg clip values above
+	 * (blend direction, cardinal, leg warps) describe the pose before mirroring. How long the change takes is the
+	 * Blend Time of the Mirror node in the graph.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Coralis|Stance")
+	bool bMirrorPose = false;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Coralis|State")
 	bool bAiming = false;
 
@@ -222,6 +230,7 @@ protected:
 	bool bUseRightCardinal = true;
 
 private:
+	void UpdateMirror(bool bLeftHanded);
 	void UpdateCardinal(bool bMoving);
 	void UpdateBlendDirection(bool bMoving, float DeltaSeconds);
 	void UpdateSprintLean(float DeltaSeconds);
@@ -229,6 +238,9 @@ private:
 
 	/** Last travel direction relative to the body while moving (held while stopping). */
 	float LastTravelDirection = 0.f;
+
+	/** LocoDirection as the leg clips see it: flipped left to right while the pose is mirrored. */
+	float ClipDirection = 0.f;
 
 	float SprintLeanLinear = 0.f;
 

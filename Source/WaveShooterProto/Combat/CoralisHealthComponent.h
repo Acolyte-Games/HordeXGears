@@ -61,6 +61,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Coralis|Health")
 	bool bTraceAgainstMeshBodies = true;
 
+	/** Health regained per second once nothing has hit for RegenDelay. 0 = no regeneration. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Coralis|Health|Regeneration", meta = (ClampMin = "0"))
+	float RegenRate = 0.f;
+
+	/** Time without damage before regeneration starts. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Coralis|Health|Regeneration", meta = (ClampMin = "0", Units = "Seconds"))
+	float RegenDelay = 5.f;
+
+	/** Takes no damage. Server side. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Coralis|Health")
+	bool bInvulnerable = false;
+
 	UPROPERTY(BlueprintAssignable, Category = "Coralis|Health")
 	FCoralisHealthChangedSignature OnHealthChanged;
 
@@ -81,6 +93,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Coralis|Health")
 	const FCoralisDamageEvent& GetLastDamage() const { return LastDamage; }
 
+	/** Server only: who dealt the latest damage. May be unset (world damage, debug commands). */
+	UFUNCTION(BlueprintPure, Category = "Coralis|Health")
+	AController* GetLastInstigator() const { return LastInstigator.Get(); }
+
 	/**
 	 * Server only. Applies BaseDamage scaled by the zone that Hit landed on.
 	 * Returns the damage actually taken (0 when already depleted).
@@ -96,7 +112,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Coralis|Health")
 	ECoralisHitZone ResolveHitZone(const FHitResult& Hit, float& OutMultiplier) const;
 
+	/** Debug: damages the owner through the server, from either side. Does nothing in shipping builds. */
+	UFUNCTION(BlueprintCallable, Category = "Coralis|Debug")
+	void DebugDamage(float Amount);
+
 	virtual void BeginPlay() override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
@@ -105,6 +126,14 @@ private:
 
 	UPROPERTY(ReplicatedUsing = OnRep_LastDamage)
 	FCoralisDamageEvent LastDamage;
+
+	UFUNCTION(Server, Reliable)
+	void ServerDebugDamage(float Amount);
+
+	TWeakObjectPtr<AController> LastInstigator;
+
+	/** Server: world time at which regeneration may start. */
+	double RegenStartTime = 0.0;
 
 	UFUNCTION()
 	void OnRep_Health();

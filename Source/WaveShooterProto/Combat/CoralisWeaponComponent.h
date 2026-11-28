@@ -8,11 +8,14 @@
 #include "Components/ActorComponent.h"
 #include "CoralisWeaponComponent.generated.h"
 
+class UCoralisWeaponComponent;
 class UCoralisWeaponSettings;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FCoralisShotFiredSignature, FVector, Start, FVector, End);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FCoralisHitConfirmedSignature, float, Damage, ECoralisHitZone, Zone, bool, bDepleted);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCoralisVentStartedSignature, bool, bSweetSpot);
+DECLARE_MULTICAST_DELEGATE_FourParams(FCoralisServerShotSignature, const UCoralisWeaponComponent& /*Weapon*/,
+	const FVector& /*Start*/, const FVector& /*End*/, const AActor* /*HitActor*/);
 
 /**
  * A heat weapon carried by a character.
@@ -90,6 +93,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Coralis|Weapon")
 	FCoralisVentStartedSignature OnVentStarted;
 
+	/** Server: every shot of every weapon in every world, with what it struck (may be null). For reactions to incoming fire. */
+	static FCoralisServerShotSignature OnServerShot;
+
 	virtual void BeginPlay() override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -142,6 +148,8 @@ private:
 	double GetStateTime() const;
 	bool IsLocallyControlledOwner() const;
 	bool CanOwnerUseWeapon() const;
+	/** The owner has Coralis health and none of it is left. */
+	bool IsOwnerDead() const;
 	bool IsOwnerAiming() const;
 
 	void TryFireShot(double ShotTime);
